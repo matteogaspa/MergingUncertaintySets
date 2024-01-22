@@ -7,8 +7,8 @@ library(glmnet)
 library(ggplot2)
 library(gridExtra)
 library(limSolve)
-source("utilsFuns.R")
-source("/Users/gaspa/Desktop/Phd/Research/CMU/MergingSets/Code/utils.R")
+source("ewmaAlgorithm.R")
+source("AirBnb/utilsFuns.R")
 
 # Functions -----
 loss_fun <- function(c, sets, a, b){
@@ -32,7 +32,7 @@ sizes <- function(sets){
 
 
 # Load data -----
-dati <- read.table("affitti.txt", header = T)
+dati <- read.table("AirBnb/affitti.txt", header = T)
 dati <- dati %>% select(price, latitude, longitude, accommodates, bathrooms, bedrooms,
                         extra_people, minimum_nights, maximum_nights, number_of_reviews,
                         review_scores_rating, review_scores_accuracy, reviews_per_month,
@@ -149,53 +149,7 @@ p2<-ggplot(results2, aes(x = iter)) +
 
 grid.arrange(p1, p2, nrow = 1)
 
-ada_alg$eta; ada_alg_nn$eta
 
-data.eta <- data.frame("iter"= 2:t, "without.NN" = ada_alg$eta[2:t], "with.NN" = ada_alg_nn$eta[2:t])
-p3<-ggplot(data.eta, aes(x = iter)) +
-  geom_line(aes(y = without.NN, color = "K=4"), linetype = "solid", size = 1) +
-  geom_line(aes(y = with.NN, color = "K=5"), linetype = "solid", size = 1) + 
-  labs(title = "", x = "Iter", y = "eta", color = "") +
-  geom_hline(yintercept = 0.1, color = "red", linetype = "dashed") + 
-  geom_hline(yintercept = 1, color = "green", linetype = "dashed") +
-  theme_minimal() + theme(legend.position = "bottom") 
-p4<-ggplot(data.eta[2:t,], aes(x = iter)) +
-  geom_line(aes(y = without.NN, color = "K=4"), linetype = "solid", size = 1) +
-  geom_line(aes(y = with.NN, color = "K=5"), linetype = "solid", size = 1) +
-  labs(title = "", x = "Iter", y = "eta", color = "") +
-  geom_hline(yintercept = 0.1, color = "red", linetype = "dashed") + 
-  geom_hline(yintercept = 1, color = "green", linetype = "dashed") +
-  theme_minimal() + theme(legend.position = "bottom") 
-grid.arrange(p3, p4, nrow = 1)
-
-# Stacking (offline) -----
-n_cross <- 10
-mat_n   <- matrix(NA, nrow = NROW(Xt), ncol = k)
-for(i in 1:n_cross){
-  sel            <- (1+7500*(i-1)):(7500*i) 
-  conf.pred.ints <- lapply(funs, function(z) conformal.pred.split(Xt[-sel,], yt[-sel], Xt[sel,], alpha = alpha/2, train.fun = z$train, predict.fun = z$predict))
-  for(j in 1:k){
-    mat_n[sel, j] <- conf.pred.ints[[j]]$pred
-  }
-  cat("Iter:", i, "\n")
-}
-
-E  <- rep(1, k)
-Fv <- 1
-G  <- diag(rep(1, k))
-H  <- rep(0, k)
-
-w_stack <- lsei(A = mat_n, B = yt, E = E, F = Fv, G = G, H = H)
-w_stack 
-h_stack <- data.frame(
-  method = c("RF", "LM", "Lasso", "Ridge", "NN"),
-  weight = w_stack$X
-)
-
-ggplot(h_stack, aes(x = method, y = weight)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Stacking", x = "", y = "Weight") +
-  theme_minimal() + ylim(0, 1) + theme(legend.position = "bottom")
 
 # weights -----
 plots.w <- vector("list", 6)
