@@ -312,20 +312,32 @@ adahedAlg <- adahedge(loss.matrix2)
 N <- NROW(adahedAlg$weights)
 K <- NCOL(adahedAlg$weights)
 t <- NROW(elec)-N
-pi.m <- pi.wm <- matrix(NA, N, 2)
-m.cov <- rep(NA, N)
-wm.cov <- rep(NA, N)
+pi.m <- pi.wm <- vector("list", length = N)
+m.cov <- rep(0, N)
+wm.cov <- rep(0, N)
 
 for(i in 1:N){
   conf.t <- rbind(lmElecPred$piAdapt[i,],
                   RidgeElecPred$piAdapt[i,],
                   LassoElecPred$piAdapt[i,])
-  maj.int <- majority_vote(conf.t, w=adahedAlg$weights[i,], 0.5)
+  maj.int <- majority_vote(conf.t, w=adahedAlg$weights[i,], 0.5) 
   wmaj.int <- majority_vote(conf.t, w=adahedAlg$weights[i,], runif(1, 0.5, 1))
-  pi.m[i,] <- maj.int
-  pi.wm[i,] <- wmaj.int
-  m.cov[i] <- as.numeric((maj.int[1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= maj.int[2]))
-  wm.cov[i] <- as.numeric((wmaj.int[1] <= elec$transfer[t+i]) &(elec$transfer[t+i] <= wmaj.int[2]))
+  pi.m[[i]] <- maj.int
+  pi.wm[[i]] <- wmaj.int
+  if(maj.int[1]==-Inf){
+    m.cov[i] <- 1
+  }else{
+    for(j in 1:NROW(maj.int)){
+      m.cov[i] <- m.cov[i] + as.numeric((maj.int[j,1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= maj.int[j,2]))
+    }
+  }
+  if(wmaj.int[1]==-Inf){
+    wm.cov[i] <- 1
+  }else{
+    for(j in 1:NROW(wmaj.int)){
+      wm.cov[i] <- wm.cov[i] + as.numeric((wmaj.int[j,1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= wmaj.int[j,2]))
+    }
+  }
   if(i %% 100 == 0){
     print(sprintf("Done %i time steps",i))
   }
@@ -358,20 +370,32 @@ hedAlg <- hedge(loss.matrix2, eta = 0.1)
 N <- NROW(adahedAlg$weights)
 K <- NCOL(adahedAlg$weights)
 t <- NROW(elec)-N
-pi.m <- pi.wm <- matrix(NA, N, 2)
-m.cov <- rep(NA, N)
-wm.cov <- rep(NA, N)
-
+pi.m <- pi.wm <- vector("list", length = N)
+m.cov <- rep(0, N)
+wm.cov <- rep(0, N)
+set.seed(123456)
 for(i in 1:N){
   conf.t <- rbind(lmElecPred$piAdapt[i,],
                   RidgeElecPred$piAdapt[i,],
                   LassoElecPred$piAdapt[i,])
   maj.int <- majority_vote(conf.t, w=hedAlg$weights[i,], 0.5)
   wmaj.int <- majority_vote(conf.t, w=hedAlg$weights[i,], runif(1,0.5,1))
-  pi.m[i,] <- maj.int
-  pi.wm[i,] <- wmaj.int
-  m.cov[i] <- as.numeric((maj.int[1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= maj.int[2]))
-  wm.cov[i] <- as.numeric((wmaj.int[1] <= elec$transfer[t+i]) &(elec$transfer[t+i] <= wmaj.int[2]))
+  pi.m[[i]] <- maj.int
+  pi.wm[[i]] <- wmaj.int
+  if(maj.int[1]==-Inf | is.na(maj.int)[1]){
+    m.cov[i] <- 1 - I(is.na(maj.int)[1])
+  }else{
+    for(j in 1:NROW(maj.int)){
+      m.cov[i] <- m.cov[i] + as.numeric((maj.int[j,1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= maj.int[j,2]))
+    }
+  }
+  if(wmaj.int[1]==-Inf | is.na(wmaj.int)[1]){
+    wm.cov[i] <- 1 - is.na(wmaj.int)[1]
+  }else{
+    for(j in 1:NROW(wmaj.int)){
+      wm.cov[i] <- wm.cov[i] + as.numeric((wmaj.int[j,1] <= elec$transfer[t+i]) & (elec$transfer[t+i] <= wmaj.int[j,2]))
+    }
+  }
   if(i %% 100 == 0){
     print(sprintf("Done %i time steps",i))
   }
@@ -407,8 +431,8 @@ ts.plot(hedAlg$weights, col=1:3)
 
 
 # SECTION 2 ------
-set.seed(123)
-runMix <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambda = 0.01, nu = 0.1){
+set.seed(123)  
+runMix <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambda = 0.01, nu = 0.05){
   T <- length(Y)
   ## Initialize data storage variables
   alphaTrajectory <- rep(alpha,T-tinit+1)
@@ -461,8 +485,8 @@ runMix <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambda = 0
     confQuantsnoAdapt[2,] <- c(predt2 - confQuantnoAdapt2, predt2 + confQuantnoAdapt2)
     confQuantsnoAdapt[3,] <- c(predt3 - confQuantnoAdapt3, predt3 + confQuantnoAdapt3)
     
-    piNoAdapt <- majority_vote(confQuantsnoAdapt, rep(1,3), 0.5)
-    for(j in nrow(piNoAdapt)){
+    piNoAdapt <- majority_vote(confQuantsnoAdapt, wt/sum(wt), 0.5)
+    for(j in 1:nrow(piNoAdapt)){
       noAdaptErrorSeq[t-tinit+1] <- 1 -noAdaptErrorSeq[t-tinit+1]*(as.numeric(piNoAdapt[j,1] < Y[t] && Y[t] < piNoAdapt[j,2]))
     }
     
@@ -475,7 +499,7 @@ runMix <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambda = 0
       adaptErrSeq[t-tinit+1] <- 0
       confQuantAdapt <- Inf
       #piAdapt[t-tinit+1,] <- c(predt1 - confQuantnoAdapt1, predt1 + confQuantnoAdapt1)
-      wTrajectory[t-tinit+1,] <- wt/sum(wt)
+      wTrajectory[t-tinit+1,] <- wt
     }else{
       confQuantAdapt1 <- quantile(scores1,probs=1-alphat)
       confQuantAdapt2 <- quantile(scores2,probs=1-alphat)
@@ -484,8 +508,8 @@ runMix <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambda = 0
       confQuants[1,] <- c(predt1 - confQuantAdapt1, predt1 + confQuantAdapt1)
       confQuants[2,] <- c(predt2 - confQuantAdapt2, predt2 + confQuantAdapt2)
       confQuants[3,] <- c(predt3 - confQuantAdapt3, predt3 + confQuantAdapt3)
-      piAdapt <- majority_vote(confQuants, rep(1,3), 0.5)
-      for(j in nrow(piNoAdapt)){
+      piAdapt <- majority_vote(confQuants, wt/sum(wt), 0.5)
+      for(j in 1:nrow(piNoAdapt)){
         adaptErrSeq[t-tinit+1] <- 1 - adaptErrSeq[t-tinit+1]*(as.numeric(piAdapt[j,1] < Y[t] && Y[t] < piAdapt[j,2]))
       }
       ## update weights
@@ -566,8 +590,8 @@ runMixAdapt <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambd
     confQuantsnoAdapt[2,] <- c(predt2 - confQuantnoAdapt2, predt2 + confQuantnoAdapt2)
     confQuantsnoAdapt[3,] <- c(predt3 - confQuantnoAdapt3, predt3 + confQuantnoAdapt3)
     
-    piNoAdapt <- majority_vote(confQuantsnoAdapt, rep(1,3), 0.5)
-    for(j in nrow(piNoAdapt)){
+    piNoAdapt <- majority_vote(confQuantsnoAdapt, wt/sum(wt), 0.5)
+    for(j in 1:nrow(piNoAdapt)){
       noAdaptErrorSeq[t-tinit+1] <- 1 - noAdaptErrorSeq[t-tinit+1]*(as.numeric(piNoAdapt[j,1] < Y[t] && Y[t] < piNoAdapt[j,2]))
     }
 
@@ -593,8 +617,8 @@ runMixAdapt <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambd
       confQuants[1,] <- c(predt1 - confQuantAdapt1, predt1 + confQuantAdapt1)
       confQuants[2,] <- c(predt2 - confQuantAdapt2, predt2 + confQuantAdapt2)
       confQuants[3,] <- c(predt3 - confQuantAdapt3, predt3 + confQuantAdapt3)
-      piAdapt <- majority_vote(confQuants, wt, 0.5)
-      for(j in nrow(piNoAdapt)){
+      piAdapt <- majority_vote(confQuants, wt/sum(wt), 0.5)
+      for(j in 1:nrow(piNoAdapt)){
         adaptErrSeq[t-tinit+1] <- 1-adaptErrSeq[t-tinit+1]*(as.numeric(piAdapt[j,1] < Y[t] && Y[t] < piAdapt[j,2]))
       }
       ## update weights
@@ -621,7 +645,7 @@ runMixAdapt <- function(Y, X, alpha, gamma, tinit = 445, splitSize = 0.75, lambd
 }
 
 rMixAdap <- runMixAdapt(elec$transfer, as.matrix(elec[,1:4]), alpha = 0.05, gamma = 0.005)
-
+set.seed(123)
 data.plot <- data.frame(
   iter = 1:N,
   etaF = 1- stats::filter(rMix$AdaptErr, rep(1/400, 400)),
@@ -637,9 +661,9 @@ pmA <- ggplot(data.plot, aes(x = iter)) +
   labs(title = "", x = "Iter", y = "Local Level Coverage", color = "") +
   scale_color_manual(values = c("Adapt" = "blue", "No Adapt" = "red", "Bern 0.95" = "gray")) +
   theme_minimal() + theme(legend.position = "bottom")+
-  ylim(0.8,1)
+  ylim(0.75,1)
 pmA
-
+set.seed(123)
 data.plot <- data.frame(
   iter = 1:N,
   etaF = 1 - stats::filter(rMixAdap$AdaptErr, rep(1/400, 400)),
@@ -652,9 +676,9 @@ pmB <- ggplot(data.plot, aes(x = iter)) +
   geom_line(aes(y = bern, color = "Bern 0.95"), linetype = "solid") +
   geom_hline(yintercept = 0.95, color = "black", linetype = "dashed") +
   labs(title = "", x = "Iter", y = "Local Level Coverage", color = "") +
-  scale_color_manual(values = c("Adapt" = "blue", "No Adapt" = "red", "Bern 0.95" = "gray")) +
+  scale_color_manual(values = c("xAdapt" = "blue", "No Adapt" = "red", "Bern 0.95" = "gray")) +
   theme_minimal() + theme(legend.position = "bottom")+
-  ylim(0.8,1)
+  ylim(0.75,1)
 pmB
 
 grid.arrange(pmA, pmB, ncol = 2)
