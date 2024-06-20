@@ -8,7 +8,7 @@ library(ggplot2)
 library(mlr)
 library(gridExtra)
 library(mvtnorm)
-source("utils_simul_rcps.R")
+source("utils.R")
 
 # Generate data -----
 nclass <- 10
@@ -291,7 +291,7 @@ for(i in 1:nrow(maj_ints)){
 }
 mean(loss_maj); mean(loss_rand_maj)
 
-# Example
+# Plots -----
 i <- 100
 vote <- cbind(loss_cvg(ys, sets1[i,]), loss_cvg(ys, sets2[i,]), loss_cvg(ys, sets3[i,]), loss_cvg(ys, sets4[i,]), 
               loss_cvg(ys, sets5[i,]), loss_cvg(ys, sets6[i,]), loss_cvg(ys, sets7[i,]))

@@ -1,5 +1,11 @@
-# majority vote
-# counts in a interval 
+# MAJORITY VOTE
+
+# Utils function
+# counts (of voters) in a interval
+# M: intervals
+# a: lower
+# b: upper
+# w: weights
 counts_int <- function(M, a, b, w){
   k <- ncol(M)
   num_int <- weighted.mean(I(M[,1]<=((a+b)*0.5) & ((a+b)*0.5)<=M[,2]), w)
@@ -7,8 +13,10 @@ counts_int <- function(M, a, b, w){
 }
 
 
+# Function for majority vote
 # M: matrix of interval (each interval lower and upper)
-# q: quantile
+# w: weigths
+# rho: threshold
 majority_vote <- function(M, w, rho=0.5){
   k <- nrow(M)
   breaks <- as.vector(M)
