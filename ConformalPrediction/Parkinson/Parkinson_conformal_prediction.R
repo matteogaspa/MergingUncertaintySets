@@ -18,7 +18,7 @@ y <- dati$total_UPDRS
 X <- dati[,-c(1,2)]
 X[,1:18] <- scale(X[,1:18])
 
-set.seed(123)
+set.seed(1234)
 train <- sample(1:NROW(y), 5000)
 test  <- setdiff(1:NROW(y), train)
 
@@ -48,56 +48,9 @@ Xtrain <- Xtrain[, -vars_to_rem]
 X0 <- X0[, -vars_to_rem]
 corrplot(cor(Xtrain))
 
-# Indices of Split
-split.ind <- sample(1:5000, 2500)
-Xt <- Xtrain[split.ind,]
-yt <- ytrain[split.ind]
-# the other indices takes part to the calibration set
-
-# Train Random Forest -----
-set.seed(123)
-tr_0  <- sample(1:2500, size = 1500)
-m0_rf <- randomForest(x = Xt[tr_0,], y = yt[tr_0], mtry = NCOL(Xt), ntree = 10)
-p0_rf <- predict(m0_rf, Xt[-tr_0,])
-mean((p0_rf - yt[-tr_0])^2)
-
-par1  <- seq(4, 14, by = 2)
-par2  <- seq(100, 500, by = 100)
-hypp  <- expand.grid(par1, par2)
-res   <- rep(NA, NROW(hypp))
-
-for(i in 1:NROW(hypp)){
-  m0_rf <- randomForest(x = Xt[tr_0,], y = yt[tr_0], mtry = hypp[i,1], ntree = hypp[i,2])
-  p0_rf <- predict(m0_rf, Xt[-tr_0,])
-  res[i]<- mean((p0_rf - yt[-tr_0])^2)
-  cat(i, "\n")
-}
-
-plot(hypp[,1], res, xlab = "mtry", ylab = "mse")
-image(par1, par2, res %>% matrix(., nrow=6, ncol=5) )
-hypp[which.min(res),]  # ntree: 400, varfrac = 1
-
-
-# Train nnet -----
-par1  <- seq(4, 16, by = 2)
-par2  <- 10^(-3:2)
-hypp  <- expand.grid(par1, par2)
-res   <- rep(NA, NROW(hypp))
-
-set.seed(1234)
-for(i in 1:NROW(hypp)){
-  m0_nn <- nnet.funs$train(x = Xt[tr_0,], y = yt[tr_0], size = hypp[i,1], decay = hypp[i, 2], maxit = 2000, linout = T)
-  p0_nn <- predict(m0_nn, Xt[-tr_0,])
-  res[i]<- mean((p0_nn - yt[-tr_0])^2)
-  cat(i, "\n")
-}
-
-plot(hypp[,1], res, xlab = "size", ylab = "mse")
-plot(log(hypp[,2], 10), res, xlab = "decay", ylab = "mse")
-hypp[which.min(res),]  # decay = 10, size = 16
 
 nnet.funs <- list(
-  train = function(x, y, ...) nnet.train(x, y, size = 12, decay = 1, linout = T, maxit = 2000),
+  train = function(x, y, ...) nnet.train(x, y, size = 20, decay = 1, linout = T, maxit = 2000),
   predict  = function(out, newx) nnet.preds(out, newx)
 )
 
@@ -106,11 +59,11 @@ nnet.funs <- list(
 funs <- list()
 funs[[1]] <- lm.funs()
 funs[[2]] <- lasso.funs(standardize = F, cv = T, cv.rule = "min")
-funs[[3]] <- rf.funs(ntree = 400, varfrac = 1)
+funs[[3]] <- rf.funs(ntree = 400)
 funs[[4]] <- nnet.funs
 
-conf.ints1 <- lapply(funs, function(z) conformal.pred.split(Xt, yt, as.matrix(X0), alpha = 0.05,
-                                                            train.fun = z$train, predict.fun = z$predict, seed = split.ind))
+conf.ints1 <- lapply(funs, function(z) conformal.pred.split(Xtrain, ytrain, as.matrix(X0), alpha = 0.1,
+                                                            train.fun = z$train, predict.fun = z$predict))
 
 
 # Coverage of Majority Vote and Randomized Majority Vote
@@ -133,8 +86,8 @@ coverages <- c(colMeans(res_out), mean(our_out1), mean(our_out2), mean(our_out3)
 # Lenght of the methods
 avg_length <- lapply(conf.ints1, function(x) (x$up - x$lo) %>% mean)
 
-res_len <- res_dou <- matrix(NA, nrow = length(y0), ncol = 3)
-
+res_len <- res_dou <- matrix(NA, nrow = length(y0), ncol = 4)
+cov_e <- rep(0, length(y0))
 for(i in 1:length(y0)){
   M <- matrix(NA, nrow = 4, ncol = 2)
   for(j in 1:4){
@@ -157,14 +110,21 @@ for(i in 1:length(y0)){
   for(l in 1:nrow(ci3)){
     res_len[i,3] <- ifelse(is.na(ci3[1,1]), 0, ci3[l,2]-ci3[l,1])
   }
+  
+  ci4 <- as.matrix(exch_majority_vote(M))
+  res_dou[i,4] <- nrow(ci4)
+  for(l in 1:nrow(ci4)){
+    res_len[i,4] <- ifelse(is.na(ci4[1,1]), 0, ci4[l,2]-ci4[l,1])
+    cov_e[i] <- ifelse(is.na(ci4[1,1]), 0, cov_e[i] + I(ci4[l,1]<= y0[i] & y0[i] <= ci4[l,2]))
+  }
 }
 
-
+coverages   <- c(coverages, mean(cov_e))
 lengths     <- c(avg_length%>%unlist, colMeans(res_len))
 colMeans(res_dou>1)*100
 
 # Table -----
-methods_name <- c("Linear Model", "Lasso", "Random Forest", "Neural Net", "Majority Vote", "Randomized Majority Vote", "Randomized Vote")
+methods_name <- c("Linear Model", "Lasso", "Random Forest", "Neural Net", "Majority Vote", "Randomized Majority Vote", "Randomized Vote", "Exch. Vote")
 tab_p <- data.frame("Methods" = methods_name, 
                     "Coverage" = coverages,
                     "Lengths" = lengths)

@@ -96,45 +96,4 @@ exch_majority_vote <- function(M, tau = 0.5){
 }
 
 
-# exchangeable randomized majority vote
-exch_rand_majority_vote <- function(M){
-  k <- nrow(M)
-  if(k==1){ return(M) }
-  perm <- sample(1:k, replace = F)
-  permM <- M[perm,]
-  newM <- vector("list", k)
-  newM[[1]] <- matrix(permM[1,], ncol = 2)
-  for(i in 2:(k-1)){
-    newM[[i]] <- majority_vote(permM[1:i,], rep(1/i, i))
-    if(is.na(newM[[i]][1])){ return(NA) }
-  }
-  newM[[k]] <- majority_vote(permM[1:k,], rep(1/k, k), runif(1, .5, 1))
-  if(is.na(newM[[k]][1])){ return(NA) }
-  
-  breaks <- unlist(c(newM))
-  breaks <- unique(breaks)
-  breaks <- breaks[order(breaks)]
-  i <- 1
-  lower <- upper <- NULL
-  
-  while(i < length(breaks)) {
-    cond <- ifelse(counts_set(newM, breaks[i], breaks[i+1])==k, T, F)
-    if(cond){
-      lower <- c(lower, breaks[i])
-      j <- i
-      while(j < length(breaks) & cond){
-        j <- j+1
-        cond <- (counts_set(newM, breaks[j], breaks[j+1])==k)
-      }
-      i <- j
-      upper <- c(upper, breaks[i])
-    }
-    i <- i+1
-  }
-  if(is.null(lower)){
-    return(NA)
-  }else{
-    return(cbind(lower, upper))
-  }
-}
 

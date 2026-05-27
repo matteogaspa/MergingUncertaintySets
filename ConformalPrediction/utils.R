@@ -22,6 +22,41 @@ counts_set <- function(M, a, b){
   return(num_int)
 }
 
+# Coverage obtained from majority vote set
+covr_fun <- function(ci, target){
+  if(sum(is.na(ci))==1){
+    return(0)
+  }else{
+    covr <- 0
+    l   <- nrow(ci)
+    if(is.null(l)){
+      covr <- covr + as.numeric(I((ci[1] <= target) && (target <= ci[2])))
+    }else{
+      for(i in 1:l){
+        covr <- covr + as.numeric(I((ci[i,1] <= target) && (target <= ci[i,2])))
+      }
+    }
+    return(covr)
+  }
+}
+
+# size function
+size_fun <- function(ci){
+  if(sum(is.na(ci))==1){
+    return(0)
+  }else{
+    sz  <- 0
+    l   <- nrow(ci)
+    if(is.null(l)){
+      sz <- sz + (ci[2]-ci[1])
+    }else{
+      for(i in 1:l){
+        sz <- sz + (ci[i,2]-ci[i,1])
+      }
+    }
+    return(sz)
+  }
+}
 
 # M: matrix of interval (each interval lower and upper)
 # q: quantile

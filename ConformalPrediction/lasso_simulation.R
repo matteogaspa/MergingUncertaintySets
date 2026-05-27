@@ -88,7 +88,7 @@ ggplot(all_cis, aes(x = n, color = type, shape = type)) +
 
 
 
-# Simulation -----
+# Simulation different weight -----
 B   <- 10000            # number of replications
 res <- matrix(0, B, 5)  # results
 len <- matrix(0, B, 5)  # disj. ints
@@ -148,3 +148,104 @@ for(i in 1:B){
 }
 
 colMeans(res);colMeans(len>1)
+
+
+# Simulation different weights -----
+B   <- 10000             # number of replications
+res <- matrix(0, B, 5)  # results
+len <- matrix(0, B, 5)  # size ints
+set.seed(123)
+for(i in 1:B){
+  # design matrix and outcome
+  X <- matrix(rnorm(n*p), nrow = n, ncol = p)
+  y <- X %*% beta + rnorm(n)
+  
+  # design matrix and outcome (test)
+  X0 <- matrix(rnorm(n0*p), nrow = n0, ncol = p)
+  y0 <- X0 %*% beta + rnorm(n0)
+  
+  conf.pred.ints <- lapply(funs, function(z) conformal.pred.split(X, y, X0, alpha = alpha/2,
+                                                                  train.fun = z$train, predict.fun = z$predict))
+  los <- lapply(conf.pred.ints, function(x) x$lo)
+  los <- do.call(c, los)
+  ups <- lapply(conf.pred.ints, function(x) x$up)
+  ups <- do.call(c, ups)
+  cis <- cbind(los, ups)
+  
+  u1   <- runif(1, 0.5, 1)
+  
+  ci_0 <- majority_vote(cis, rep(1, k), u1)
+  ci_1 <- majority_vote(cis, c(rep(3, k/2), rep(1, k/2)), u1)
+  ci_2 <- majority_vote(cis, c(rep(1, k/2), rep(3, k/2)), u1)
+  ci_3 <- majority_vote(cis, 1:20, u1)
+  ci_4 <- majority_vote(cis, 20:1, u1)
+  
+  res[i,1] <- covr_fun(ci_0, y0)
+  res[i,2] <- covr_fun(ci_1, y0)
+  res[i,3] <- covr_fun(ci_2, y0)
+  res[i,4] <- covr_fun(ci_3, y0)
+  res[i,5] <- covr_fun(ci_4, y0)
+  
+  len[i,1] <- size_fun(ci_0)
+  len[i,2] <- size_fun(ci_1)
+  len[i,3] <- size_fun(ci_2)
+  len[i,4] <- size_fun(ci_3)
+  len[i,5] <- size_fun(ci_4)
+  
+  if(i %% 50 == 0) cat("Iter: ", i, "\n")
+}
+
+colMeans(res);colMeans(len)
+
+# no rand
+# Simulation different weights -----
+B   <- 10000             # number of replications
+res <- matrix(0, B, 5)  # results
+len <- matrix(0, B, 5)  # size ints
+res_ci <- cov_ci <- matrix(0, B, 20)
+
+set.seed(123)
+for(i in 1:B){
+  # design matrix and outcome
+  X <- matrix(rnorm(n*p), nrow = n, ncol = p)
+  y <- X %*% beta + rnorm(n)
+  
+  # design matrix and outcome (test)
+  X0 <- matrix(rnorm(n0*p), nrow = n0, ncol = p)
+  y0 <- X0 %*% beta + rnorm(n0)
+  
+  conf.pred.ints <- lapply(funs, function(z) conformal.pred.split(X, y, X0, alpha = alpha/2,
+                                                                  train.fun = z$train, predict.fun = z$predict))
+  los <- lapply(conf.pred.ints, function(x) x$lo)
+  los <- do.call(c, los)
+  ups <- lapply(conf.pred.ints, function(x) x$up)
+  ups <- do.call(c, ups)
+  cis <- cbind(los, ups)
+  res_ci[i,] <- ups-los
+  cov_ci[i,] <- apply(cis, 1, function(x) covr_fun(x, y0))
+  u1   <- .5
+  
+  ci_0 <- majority_vote(cis, rep(1, k), u1)
+  ci_1 <- majority_vote(cis, c(rep(3, k/2), rep(1, k/2)), u1)
+  ci_2 <- majority_vote(cis, c(rep(1, k/2), rep(3, k/2)), u1)
+  ci_3 <- majority_vote(cis, 1:20, u1)
+  ci_4 <- majority_vote(cis, 20:1, u1)
+  
+  res[i,1] <- covr_fun(ci_0, y0)
+  res[i,2] <- covr_fun(ci_1, y0)
+  res[i,3] <- covr_fun(ci_2, y0)
+  res[i,4] <- covr_fun(ci_3, y0)
+  res[i,5] <- covr_fun(ci_4, y0)
+  
+  len[i,1] <- size_fun(ci_0)
+  len[i,2] <- size_fun(ci_1)
+  len[i,3] <- size_fun(ci_2)
+  len[i,4] <- size_fun(ci_3)
+  len[i,5] <- size_fun(ci_4)
+  
+  if(i %% 50 == 0) cat("Iter: ", i, "\n")
+}
+
+colMeans(res);colMeans(len)
+min(colMeans(res_ci)); max(colMeans(res_ci)); mean(colMeans(res_ci))
+colMeans(cov_ci)[which.min(colMeans(res_ci))]; colMeans(cov_ci)[which.max(colMeans(res_ci))]; mean(colMeans(cov_ci))
